@@ -246,6 +246,8 @@ export default function Home() {
     }
   };
 
+  const [viewingDoc, setViewingDoc] = useState<DocumentItem | null>(null);
+
   return (
     <main className="min-h-screen bg-neutral-50 selection:bg-pup-maroon/20 font-sans">
       {/* Navbar */}
@@ -367,7 +369,21 @@ export default function Home() {
                         <h3 className="text-xl font-black text-neutral-900 mb-1">{doc.name}</h3>
                         <p className="text-xs text-neutral-400 font-mono mb-6 tracking-tight">Proof: STLR-ISKO-{doc.id.toUpperCase()}-AN-CH-N</p>
                         <div className="pt-6 border-t border-dashed border-neutral-200 flex items-center justify-between">
-                          <button className="text-xs font-bold text-pup-maroon hover:underline">View on Explorer →</button>
+                          <button 
+                            onClick={() => setViewingDoc(doc)}
+                            className="text-xs font-bold text-neutral-800 hover:text-pup-maroon flex items-center gap-1"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                            View Document
+                          </button>
+                          <a 
+                            href={`https://stellar.expert/explorer/testnet/contract/${networks.testnet.contractId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs font-bold text-pup-maroon hover:underline"
+                          >
+                            Stellar Explorer →
+                          </a>
                         </div>
                       </div>
                     </div>
@@ -379,6 +395,57 @@ export default function Home() {
                 </div>
               )}
             </section>
+
+            {/* --- MOCK CERTIFICATE MODAL --- */}
+            {viewingDoc && (
+              <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-neutral-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+                <div className="bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden relative border-8 border-neutral-100 scale-in-center">
+                  <button 
+                    onClick={() => setViewingDoc(null)}
+                    className="absolute top-8 right-8 p-2 hover:bg-neutral-100 rounded-full transition-colors z-10"
+                  >
+                    <svg className="w-6 h-6 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l18 18" /></svg>
+                  </button>
+
+                  <div className="p-12 text-center space-y-8 relative">
+                    <div className="flex justify-center mb-4">
+                      <div className="w-20 h-20 bg-pup-maroon/10 rounded-full flex items-center justify-center text-pup-maroon">
+                        <svg className="w-10 h-10" fill="currentColor" viewBox="0 0 20 20"><path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12V12a1 1 0 00.467.849l4.5 3a1 1 0 001.066 0l4.5-3A1 1 0 0016 12v-1.88l1.69-.723a1 1 0 011.045 1.706l-7 3a1 1 0 01-.788 0l-7-3a1 1 0 011.045-1.706z" /></svg>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <h2 className="text-sm font-black tracking-widest uppercase text-pup-maroon">Official University Credential</h2>
+                      <h3 className="text-4xl font-black text-neutral-900 leading-tight">{viewingDoc.name}</h3>
+                      <p className="text-neutral-500 font-medium">This document is verified and anchored on the Stellar Ledger.</p>
+                    </div>
+
+                    <div className="py-8 px-6 bg-neutral-50 rounded-3xl border border-neutral-100 space-y-4">
+                      <div className="flex justify-between items-center text-left">
+                        <div><p className="text-[10px] font-black uppercase text-neutral-400">Student Address</p><p className="font-mono text-xs text-neutral-600 truncate max-w-[200px]">{walletAddress}</p></div>
+                        <div className="text-right"><p className="text-[10px] font-black uppercase text-neutral-400">Network</p><p className="font-bold text-xs text-neutral-600">Stellar Testnet</p></div>
+                      </div>
+                      <div className="pt-4 border-t border-neutral-200">
+                        <p className="text-[10px] font-black uppercase text-neutral-400 text-left mb-1">On-Chain Proof (SBT Hash)</p>
+                        <p className="font-mono text-[10px] text-neutral-500 break-all bg-white p-3 rounded-xl border border-neutral-100">{viewingDoc.hash}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-center gap-4">
+                      <div className="flex -space-x-2">
+                        <div className="w-8 h-8 rounded-full bg-neutral-200 border-2 border-white"></div>
+                        <div className="w-8 h-8 rounded-full bg-neutral-300 border-2 border-white"></div>
+                      </div>
+                      <p className="text-xs text-neutral-400 font-bold italic">Digitally Signed by Registrar Office</p>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-pup-maroon py-4 text-center">
+                    <span className="text-white text-[10px] font-black tracking-[0.3em] uppercase">Verified Soulbound Token</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         ) : (
           /* Registrar Dashboard Content */
