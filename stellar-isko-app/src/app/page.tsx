@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { connectWallet, signWithFreighter } from "@/lib/stellar";
-import { Client, networks } from "@/client";
+import { Client, networks, rpc } from "@/client";
 
 // Types for our University Documents
 interface DocumentItem {
@@ -141,6 +141,93 @@ export default function Home() {
     } catch (err) {
       console.error(err);
       alert("Issuance failed. Are you sure you are the Admin?");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const [txHistory, setTxHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  const fetchHistory = useCallback(async () => {
+    setLoadingHistory(true);
+    try {
+      const server = new rpc.Server(networks.testnet.rpcUrl);
+      
+      // Get latest ledger to avoid "startLedger too old" errors
+      const latestLedgerRes = await server.getLatestLedger();
+      const startLedger = Math.max(0, latestLedgerRes.sequence - 10000); // Look back ~14 hours
+
+      const response = await server.getEvents({
+        startLedger: startLedger,
+        filters: [{
+          contractIds: [networks.testnet.contractId],
+        }],
+        limit: 10,
+      });
+
+      const formatted = response.events.map(event => {
+        // Simple mapping: first topic is the event name (symbol)
+        // Note: In a production app, you'd decode the ScVal XDR here.
+        // For the hackathon demo, we'll assume the order of our emitted events.
+        const type = event.type === "contract" ? "Contract Event" : event.type;
+        return {
+          id: event.id,
+          type: event.topic.join(", ").includes("pay") ? "Payment" : "Issuance",
+          student: "Verified Account", 
+          ledger: event.ledger,
+        };
+      }).reverse();
+
+      setTxHistory(formatted);
+    } catch (err: any) {
+      console.error("Detailed Event Fetch Error:", {
+        message: err.message,
+        stack: err.stack,
+        response: err.response?.data
+      });
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (view === "registrar") fetchHistory();
+  }, [view, fetchHistory]);
+
+  const handleInitialize = async () => {
+    if (!walletAddress) return;
+    setProcessing(true);
+    try {
+      const client = new Client({
+        ...networks.testnet,
+        publicKey: walletAddress,
+        signTransaction: async (tx) => {
+          const signed = await signWithFreighter(tx, networks.testnet.networkPassphrase);
+          if (!signed) throw new Error("Cancelled");
+          return signed;
+        }
+      });
+
+      // Native XLM Contract ID on Testnet
+      const nativeToken = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
+      
+      const tx = await client.initialize({
+        admin: walletAddress,
+        treasury: walletAddress,
+        payment_token: nativeToken,
+      });
+
+      await tx.signAndSend();
+      alert("✅ Contract Initialized Successfully!");
+    } catch (err: any) {
+      // Check for the specific "already initialized" panic/trap
+      if (err.message?.includes("UnreachableCodeReached") || err.message?.includes("already initialized")) {
+        alert("ℹ️ Contract is already initialized and ready for use.");
+      } else {
+        console.error(err);
+        alert("❌ Initialization failed: " + (err.message || "Unknown error"));
+      }
     } finally {
       setProcessing(false);
     }
@@ -291,6 +378,16 @@ export default function Home() {
             <div className="bg-white p-10 rounded-[2.5rem] border border-neutral-200 shadow-2xl space-y-8 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-pup-gold/5 rounded-full -mr-16 -mt-16 blur-2xl"></div>
               
+              <div className="flex justify-between items-center">
+                <h3 className="text-2xl font-black text-neutral-900">Issue New Credential</h3>
+                <button 
+                  onClick={handleInitialize}
+                  className="text-xs font-bold text-pup-maroon border border-pup-maroon/20 px-3 py-1 rounded-lg hover:bg-pup-maroon/5"
+                >
+                  Admin Init
+                </button>
+              </div>
+
               <div className="space-y-2">
                 <label className="text-sm font-black uppercase tracking-wider text-neutral-400 ml-1">Student Wallet Address</label>
                 <input 
@@ -329,6 +426,54 @@ export default function Home() {
               </button>
             </div>
 
+            <div className="bg-white p-8 rounded-[2.5rem] border border-neutral-200 shadow-xl space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-2xl font-black text-neutral-900">Finance Overview</h3>
+                <button onClick={fetchHistory} className="text-sm font-bold text-pup-maroon hover:bg-pup-maroon/5 px-3 py-1 rounded-lg transition-colors">↻ Refresh History</button>
+              </div>
+              
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="border-b border-neutral-100">
+                      <th className="py-4 text-xs font-black uppercase tracking-widest text-neutral-400">Activity</th>
+                      <th className="py-4 text-xs font-black uppercase tracking-widest text-neutral-400">Account</th>
+                      <th className="py-4 text-xs font-black uppercase tracking-widest text-neutral-400">Details</th>
+                      <th className="py-4 text-xs font-black uppercase tracking-widest text-neutral-400 text-right">Ledger</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-50">
+                    {loadingHistory ? (
+                      <tr>
+                        <td colSpan={4} className="py-12 text-center text-neutral-400 font-medium animate-pulse">Scanning the ledger for events...</td>
+                      </tr>
+                    ) : txHistory.length > 0 ? (
+                      txHistory.map((tx) => (
+                        <tr key={tx.id} className="group hover:bg-neutral-50 transition-colors">
+                          <td className="py-4">
+                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${
+                              tx.type === "Payment" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
+                            }`}>
+                              {tx.type}
+                            </span>
+                          </td>
+                          <td className="py-4 font-mono text-sm text-neutral-600">{tx.student}</td>
+                          <td className="py-4 text-sm text-neutral-500 font-medium">
+                            {tx.type === "Payment" ? "Fee: 10.0 XLM" : "SBT Credential Generated"}
+                          </td>
+                          <td className="py-4 text-sm text-neutral-400 text-right font-mono">#{tx.ledger}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={4} className="py-12 text-center text-neutral-400 font-medium italic">No recent activity detected on this contract.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="p-6 bg-white border border-neutral-200 rounded-3xl space-y-2 shadow-sm">
                 <h4 className="text-neutral-400 text-xs font-black uppercase tracking-widest">Active Admin</h4>
@@ -336,7 +481,7 @@ export default function Home() {
               </div>
               <div className="p-6 bg-white border border-neutral-200 rounded-3xl space-y-2 shadow-sm">
                 <h4 className="text-neutral-400 text-xs font-black uppercase tracking-widest">Contract ID</h4>
-                <p className="font-mono text-sm text-neutral-700 break-all">CALA...UHT3</p>
+                <p className="font-mono text-sm text-neutral-700 break-all">{networks.testnet.contractId}</p>
               </div>
             </div>
           </section>

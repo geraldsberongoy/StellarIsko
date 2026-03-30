@@ -34,7 +34,7 @@ if (typeof window !== "undefined") {
 export const networks = {
   testnet: {
     networkPassphrase: "Test SDF Network ; September 2015",
-    contractId: "CALAEYLGS5GPW74BETR77543UBKUFUPTOD3HOYMODGWQFHWQ7JBDUHT3",
+    contractId: "CBW23F5HWT5HHDLGMA4U4NGPGOS6B6K5HCLWLLH5BZOXFOKU4VPV35OK",
     rpcUrl: "https://soroban-testnet.stellar.org",
   }
 } as const
