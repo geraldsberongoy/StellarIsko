@@ -59,6 +59,25 @@ StellarIsko solves this by using Soroban smart contracts to enable instant XLM/U
 
 ---
 
+### 📸 UI SHOWCASE & USER FLOW
+*Follow the journey of an Iskor ng Bayan from document request to verified digital ownership.*
+
+#### 1. Student Request & Instant Payment
+Students browse the document catalog and pay using XLM/USDC. The payment is settled on the Stellar ledger in under 5 seconds.
+![Student Dashboard 1](./pic/stellar_1.png)
+![Student Dashboard 2](./pic/stellar_2.png)
+
+#### 2. Registrar Dashboard & Audit
+The University Registrar sees a real-time feed of verified payments and a Financial Overview of the Treasury. With one click, they authorize the issuance.
+![Registrar Dashboard 1](./pic/stellar_3.png)
+![Registrar Dashboard 2](./pic/stellar_4.png)
+
+#### 3. Soulbound Ownership & Verification
+The document is anchored to the student's wallet as a Soulbound Token (SBT). Employers can verify the authenticity of the record instantly via the on-chain "Proof" hash.
+![Credential Wallet](./pic/stellar_5.png)
+
+---
+
 ### 🧪 AUTOMATED TESTS
 The contract includes exactly **3 comprehensive tests** to ensure security and reliability:
 

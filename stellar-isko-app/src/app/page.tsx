@@ -2,7 +2,11 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { connectWallet, signWithFreighter } from "@/lib/stellar";
-import { Client, networks, rpc } from "@/client";
+import { Client, networks, rpc, Horizon } from "@/client";
+
+// The Official University Admin & Treasury Addresses
+const UNIVERSITY_ADMIN = "GD67NPG7TKJDE5HEHSPWS3YAWYNHWTLWRSQMTO4NQOVSZAEFPICO3HYG";
+const UNIVERSITY_TREASURY = "GBRLGRWUJXJSHJDZQ4OH2SDH7ROF7EWAHI4ZIQM2E6TMONH7IG4P7QKL";
 
 // Types for our University Documents
 interface DocumentItem {
@@ -130,7 +134,7 @@ export default function Home() {
 
       const hashBuffer = Buffer.from(targetDocHash, "hex");
       const tx = await client.issue_soulbound_credential({
-        admin: walletAddress,
+        admin: UNIVERSITY_ADMIN, // Use the official hardcoded admin
         student: targetStudent,
         doc_hash: hashBuffer,
       });
@@ -138,9 +142,13 @@ export default function Home() {
       const response = await tx.signAndSend();
       alert("Credential Issued Successfully on Testnet!");
       console.log("Issue Result:", response);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Issuance failed. Are you sure you are the Admin?");
+      if (err.message?.includes("Auth")) {
+        alert("⛔ Access Denied: You must be connected with the Official Admin Wallet (" + UNIVERSITY_ADMIN.substring(0,6) + "...) to issue credentials.");
+      } else {
+        alert("Issuance failed. Please check the console.");
+      }
     } finally {
       setProcessing(false);
     }
@@ -148,44 +156,49 @@ export default function Home() {
 
   const [txHistory, setTxHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [treasuryBalance, setTreasuryBalance] = useState<string>("0.00");
 
   const fetchHistory = useCallback(async () => {
     setLoadingHistory(true);
     try {
+      // 1. Fetch REAL XLM Balance of the Treasury from Horizon
+      const horizonServer = new Horizon.Server("https://horizon-testnet.stellar.org");
+      const account = await horizonServer.loadAccount(UNIVERSITY_TREASURY);
+      const xlmBalance = account.balances.find(b => b.asset_type === "native")?.balance;
+      setTreasuryBalance(parseFloat(xlmBalance || "0").toFixed(2));
+
+      // 2. Fetch Soroban Events
       const server = new rpc.Server(networks.testnet.rpcUrl);
-      
-      // Get latest ledger to avoid "startLedger too old" errors
       const latestLedgerRes = await server.getLatestLedger();
-      const startLedger = Math.max(0, latestLedgerRes.sequence - 10000); // Look back ~14 hours
+      const startLedger = Math.max(0, latestLedgerRes.sequence - 10000);
 
       const response = await server.getEvents({
         startLedger: startLedger,
-        filters: [{
-          contractIds: [networks.testnet.contractId],
-        }],
-        limit: 10,
+        filters: [{ contractIds: [networks.testnet.contractId] }],
+        limit: 15,
       });
 
       const formatted = response.events.map(event => {
-        // Simple mapping: first topic is the event name (symbol)
-        // Note: In a production app, you'd decode the ScVal XDR here.
-        // For the hackathon demo, we'll assume the order of our emitted events.
-        const type = event.type === "contract" ? "Contract Event" : event.type;
+        const isPay = event.topic.some(t => {
+          try {
+            const topicStr = (t as any).toString().toLowerCase();
+            return topicStr.includes("pay") || topicStr.includes("aaaaeaaaaaa="); 
+          } catch { return false; }
+        });
+
         return {
           id: event.id,
-          type: event.topic.join(", ").includes("pay") ? "Payment" : "Issuance",
+          type: isPay ? "Payment" : "Issuance",
           student: "Verified Account", 
           ledger: event.ledger,
+          amount: isPay ? "10.0 XLM" : null
         };
       }).reverse();
 
       setTxHistory(formatted);
     } catch (err: any) {
-      console.error("Detailed Event Fetch Error:", {
-        message: err.message,
-        stack: err.stack,
-        response: err.response?.data
-      });
+      console.error("Sync Error:", err);
+      setTreasuryBalance("Error");
     } finally {
       setLoadingHistory(false);
     }
@@ -213,8 +226,8 @@ export default function Home() {
       const nativeToken = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
       
       const tx = await client.initialize({
-        admin: walletAddress,
-        treasury: walletAddress,
+        admin: UNIVERSITY_ADMIN,      // Official Registrar
+        treasury: UNIVERSITY_TREASURY, // Official Treasury
         payment_token: nativeToken,
       });
 
@@ -427,12 +440,24 @@ export default function Home() {
             </div>
 
             <div className="bg-white p-8 rounded-[2.5rem] border border-neutral-200 shadow-xl space-y-6">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-2">
                 <h3 className="text-2xl font-black text-neutral-900">Finance Overview</h3>
                 <button onClick={fetchHistory} className="text-sm font-bold text-pup-maroon hover:bg-pup-maroon/5 px-3 py-1 rounded-lg transition-colors">↻ Refresh History</button>
               </div>
+
+              {/* Real-time Revenue Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-green-50/50 border border-green-100 p-6 rounded-3xl">
+                  <span className="text-xs font-black text-green-600 uppercase tracking-widest">Total Treasury Revenue</span>
+                  <p className="text-4xl font-black text-green-700 mt-2">{treasuryBalance} <span className="text-lg">XLM</span></p>
+                </div>
+                <div className="bg-blue-50/50 border border-blue-100 p-6 rounded-3xl">
+                  <span className="text-xs font-black text-blue-600 uppercase tracking-widest">Completed Requests</span>
+                  <p className="text-4xl font-black text-blue-700 mt-2">{txHistory.filter(t => t.type === "Issuance").length} <span className="text-lg">SBTs</span></p>
+                </div>
+              </div>
               
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto pt-4">
                 <table className="w-full text-left">
                   <thead>
                     <tr className="border-b border-neutral-100">
